@@ -79,7 +79,7 @@ fn build_no_redirect_client(timeout_ms: u64) -> Result<reqwest::Client, String> 
 }
 
 #[tauri::command]
-pub async fn mcp_jsonrpc_call(
+async fn mcp_jsonrpc_call(
     endpoint_url: String,
     rpc_body: Value,
     timeout_ms: Option<u64>,
@@ -131,7 +131,7 @@ pub struct LlmHttpChatRequest {
 }
 
 #[tauri::command]
-pub async fn llm_http_chat(req: LlmHttpChatRequest) -> Result<Value, String> {
+async fn llm_http_chat(req: LlmHttpChatRequest) -> Result<Value, String> {
     let url = validate_endpoint_url(&req.endpoint_url)?;
     let client = build_no_redirect_client(req.timeout_ms.unwrap_or(12_000))?;
 
@@ -163,7 +163,7 @@ pub async fn llm_http_chat(req: LlmHttpChatRequest) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub fn get_native_runtime_info() -> NativeRuntimeInfo {
+fn get_native_runtime_info() -> NativeRuntimeInfo {
     NativeRuntimeInfo {
         os: std::env::consts::OS,
         arch: std::env::consts::ARCH,
