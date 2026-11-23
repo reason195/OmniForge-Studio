@@ -1,0 +1,6 @@
+{
+  "name": "OmniForge Studio",
+  "description": "Cross-platform visual automation script builder with AutoJs6 & ProxyPin MCP integration, traffic redaction, and AutoJs6 JS code generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
