@@ -30,7 +30,7 @@
 
 ### 构建命令
 ```bash
-npm install
+npm install --legacy-peer-deps
 npx --yes @tauri-apps/cli@^2 icon src-tauri/icons/app-icon.png
 npx --yes @tauri-apps/cli@^2 build --bundles nsis
 ```
@@ -50,7 +50,7 @@ npx --yes @tauri-apps/cli@^2 build --bundles nsis
 
 ### 构建命令
 ```bash
-npm install
+npm install --legacy-peer-deps
 npx --yes @tauri-apps/cli@^2 icon src-tauri/icons/app-icon.png
 npx --yes @tauri-apps/cli@^2 android init --ci
 ```
