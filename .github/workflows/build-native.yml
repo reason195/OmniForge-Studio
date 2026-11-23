@@ -31,14 +31,7 @@ jobs:
         run: npm run lint
 
       - name: Run unit tests
-        run: >
-          npx --yes tsx --test
-          src/core/redaction.test.ts
-          src/core/codegen.test.ts
-          src/core/ir.test.ts
-          src/core/nativeBridge.test.ts
-          src/server/mcpGateway.test.ts
-          src/server/llmProviders.test.ts
+        run: npm test
 
       - name: Build Vite frontend
         run: npm run build
