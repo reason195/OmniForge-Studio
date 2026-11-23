@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/core/redaction.test.ts src/core/codegen.test.ts src/core/ir.test.ts src/core/nativeBridge.test.ts src/server/mcpGateway.test.ts src/server/llmProviders.test.ts"
+    "test": "tsx --test src/core/redaction.test.ts src/core/codegen.test.ts src/core/ir.test.ts src/core/nativeBridge.test.ts src/server/mcpGateway.test.ts src/server/llmProviders.test.ts",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",
@@ -27,6 +28,8 @@
     "vite": "^8.3.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6",
+    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -34,7 +37,6 @@
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "typescript": "^7.0.2"
   }
 }
