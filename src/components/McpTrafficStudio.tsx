@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import type { WorkflowIR } from '../core/ir';
 import type { ApiContractEndpoint } from '../core/codegen';
+import {
+  detectRuntimePlatform,
+  fetchLlmProviders,
+  invokeLlmRefine,
+  invokeMcpRpc,
+} from '../core/nativeBridge';
 import type { McpGatewayResponse, McpToolDefinition } from '../server/mcpGateway';
 import type {
   LlmProviderId,
@@ -43,14 +49,14 @@ export function McpTrafficStudio({
   const [llmOutput, setLlmOutput] = useState<LlmRefineOutput | null>(null);
   const [injectedBanner, setInjectedBanner] = useState<string | null>(null);
   const [busyServer, setBusyServer] = useState<string | null>(null);
+  const runtimePlatform = detectRuntimePlatform();
 
   useEffect(() => {
     let active = true;
-    fetch('/api/llm/providers')
-      .then((res) => res.json())
-      .then((data) => {
-        if (active && data?.ok && Array.isArray(data.providers)) {
-          setProviders(data.providers as ProviderStatusInfo[]);
+    fetchLlmProviders()
+      .then((list) => {
+        if (active && list.length > 0) {
+          setProviders(list);
         }
       })
       .catch(() => {
@@ -70,21 +76,16 @@ export function McpTrafficStudio({
   ) => {
     setBusyServer(`${serverId}:${method}:${toolName || ''}`);
     try {
-      const res = await fetch('/api/mcp/rpc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serverId,
-          transport: serverId === 'autojs6' ? autojsTransport : proxypinTransport,
-          endpointUrl: serverId === 'autojs6' ? autojsUrl : proxypinUrl,
-          method,
-          toolName,
-          args,
-          timeoutMs: 4000,
-          optional,
-        }),
+      const json = await invokeMcpRpc({
+        serverId,
+        transport: serverId === 'autojs6' ? autojsTransport : proxypinTransport,
+        endpointUrl: serverId === 'autojs6' ? autojsUrl : proxypinUrl,
+        method,
+        toolName,
+        args,
+        timeoutMs: 4000,
+        optional,
       });
-      const json = (await res.json()) as McpGatewayResponse;
       if (serverId === 'autojs6') {
         if (method === 'tools/list' && json.ok && json.data && (json.data as { tools?: McpToolDefinition[] }).tools) {
           setAutojsTools((json.data as { tools: McpToolDefinition[] }).tools);
@@ -106,24 +107,19 @@ export function McpTrafficStudio({
     setLlmError(null);
     setInjectedBanner(null);
     try {
-      const res = await fetch('/api/llm/refine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          goal: llmGoal,
-          workflowName: workflow.meta.name,
-          appPackage: workflow.meta.appPackage,
-          fallbackKeywords: ['去完成', '去浏览', '立即签到', '领金币'],
-          autojsState: autojsResult?.data ?? { currentPackage: workflow.meta.appPackage },
-          proxypinTraffic: proxypinResult?.data ?? {},
-          provider: selectedProvider,
-        }),
+      const data = await invokeLlmRefine({
+        goal: llmGoal,
+        workflowName: workflow.meta.name,
+        appPackage: workflow.meta.appPackage,
+        fallbackKeywords: ['去完成', '去浏览', '立即签到', '领金币'],
+        autojsState: autojsResult?.data ?? { currentPackage: workflow.meta.appPackage },
+        proxypinTraffic: proxypinResult?.data ?? {},
+        provider: selectedProvider,
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
+      if (!data.ok || !data.result) {
         setLlmError(data.error || '规则提炼请求失败');
       } else {
-        setLlmOutput(data.result as LlmRefineOutput);
+        setLlmOutput(data.result);
       }
     } catch (err) {
       setLlmError(err instanceof Error ? err.message : '网络请求异常');
@@ -154,11 +150,21 @@ export function McpTrafficStudio({
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-lg font-bold text-slate-900">双 MCP 实时接入、抓包脱敏管道与 LLM 规则提炼</h1>
-          <p className="text-sm text-slate-600 mt-1">
-            通过统一 JSON-RPC 2.0 网关连接 AutoJs6 MCP 与 ProxyPin MCP，对敏感凭据执行强制脱敏后输入大模型提炼精确脚本变量。
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900">双 MCP 实时接入、抓包脱敏管道与 LLM 规则提炼</h1>
+            <p className="text-sm text-slate-600 mt-1">
+              通过统一 JSON-RPC 2.0 网关连接 AutoJs6 MCP 与 ProxyPin MCP，对敏感凭据执行强制脱敏后输入大模型提炼精确脚本变量。
+            </p>
+          </div>
+          <div className="text-xs font-mono text-slate-600 bg-white border border-slate-200 rounded-md px-2.5 py-1.5">
+            运行通道:{' '}
+            {runtimePlatform === 'web'
+              ? 'Web / Express 网关'
+              : runtimePlatform === 'tauri-android'
+                ? 'Android 原生桥接 (Tauri)'
+                : '桌面原生桥接 (Tauri)'}
+          </div>
         </div>
 
         {/* Dual MCP Connectors */}
