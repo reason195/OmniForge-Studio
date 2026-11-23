@@ -1,7 +1,9 @@
 {
-  "name": "react-example",
+  "name": "omniforge-studio",
+  "description": "Cross-platform visual automation script builder with AutoJs6 & ProxyPin MCP integration, traffic redaction, and AutoJs6 JS code generation.",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -9,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/core/redaction.test.ts src/core/codegen.test.ts src/core/ir.test.ts src/core/nativeBridge.test.ts src/server/mcpGateway.test.ts src/server/llmProviders.test.ts"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",
