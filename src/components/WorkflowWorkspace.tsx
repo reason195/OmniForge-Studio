@@ -26,13 +26,15 @@ import type { CompileResult } from '../core/codegen';
 import { NodeInspector } from './NodeInspector';
 import { VALIDATION_CATEGORY_LABELS, ValidationSummary } from './ValidationSummary';
 
+export type WorkflowTemplateId = 'jd' | 'miaosha' | 'coupon' | 'signin';
+
 interface WorkflowWorkspaceProps {
   workflow: WorkflowIR;
   compiled: CompileResult;
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
   onChangeWorkflow: (next: WorkflowIR) => void;
-  onLoadTemplate: (templateId: 'jd' | 'signin') => void;
+  onLoadTemplate: (templateId: WorkflowTemplateId) => void;
   validationTrigger?: number;
   handledValidationTrigger?: number;
   onValidationHandled?: (trigger: number) => void;
@@ -52,13 +54,17 @@ function summarizeNode(node: WorkflowNode): string {
     case 'scheme_jump':
       return `${node.params.encodeParams ? 'encodeURI' : 'raw'} · 等待 ${node.params.waitMs}ms`;
     case 'back_check':
-      return `返回 ${node.params.times} 次 · 校验「${node.params.expectKeyword || '无'}」`;
+      return `返回 ${node.params.times} 次 · 校验「${node.params.expectKeyword || '无'}」${node.params.dismissRetentionPopups !== false ? ' · 防挽留' : ''}`;
+    case 'dismiss_popup':
+      return `最多 ${node.params.maxLayers} 层 · ${node.params.dismissKeywords.slice(0, 3).join('/') || '图形X兜底'}`;
+    case 'landing_stay':
+      return `停留 ${node.params.targetStaySec}+${node.params.extraBufferSec}s · ${node.params.detectCountdown ? '倒计时识别' : '固定等待'}${node.params.handleCrossAppGestureBack ? ' · 跨App切回' : ''}`;
     case 'ocr_find': {
       const p = node.params as OcrFindParams;
-      return `${p.engine} · ${p.matchMode} · [${p.region.x0.toFixed(2)},${p.region.y0.toFixed(2)}..${p.region.x1.toFixed(2)},${p.region.y1.toFixed(2)}]`;
+      return `${p.preferAccessibility ? '无障碍+' : ''}${p.engine} · ${p.matchMode} · [${p.region.x0.toFixed(2)},${p.region.y0.toFixed(2)}..${p.region.x1.toFixed(2)},${p.region.y1.toFixed(2)}]`;
     }
     case 'click_target':
-      return `${node.params.mode === 'ocr_result' ? 'OCR 中心' : '比例坐标'} · 重试 ${node.params.maxRetries} 次`;
+      return `${node.params.mode === 'ocr_result' ? (node.params.preferNodeClick ? 'node.click/中心' : 'OCR 中心') : '比例坐标'} · 重试 ${node.params.maxRetries} 次`;
     case 'swipe_wait':
       return `滑动 ${node.params.durationMs}ms · __safeSleep(${node.params.waitAfterMs}ms)`;
     case 'loop_block':
@@ -478,7 +484,7 @@ export function WorkflowWorkspace({
             <button
               type="button"
               onClick={() => onLoadTemplate('jd')}
-              className={`px-2.5 py-1.5 text-xs font-medium rounded-md border text-center cursor-pointer transition-colors ${
+              className={`px-2 py-1.5 text-xs font-medium rounded-md border text-center cursor-pointer transition-colors ${
                 workflow.meta.id === 'wf_jd_jr_daily_01'
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
                   : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
@@ -488,8 +494,30 @@ export function WorkflowWorkspace({
             </button>
             <button
               type="button"
+              onClick={() => onLoadTemplate('miaosha')}
+              className={`px-2 py-1.5 text-xs font-medium rounded-md border text-center cursor-pointer transition-colors ${
+                workflow.meta.id === 'wf_jd_miaosha_beans_03'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              秒杀·天天领豆
+            </button>
+            <button
+              type="button"
+              onClick={() => onLoadTemplate('coupon')}
+              className={`px-2 py-1.5 text-xs font-medium rounded-md border text-center cursor-pointer transition-colors ${
+                workflow.meta.id === 'wf_jd_coupon_center_04'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              京东领券中心
+            </button>
+            <button
+              type="button"
               onClick={() => onLoadTemplate('signin')}
-              className={`px-2.5 py-1.5 text-xs font-medium rounded-md border text-center cursor-pointer transition-colors ${
+              className={`px-2 py-1.5 text-xs font-medium rounded-md border text-center cursor-pointer transition-colors ${
                 workflow.meta.id === 'wf_signin_coupon_02'
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
                   : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
@@ -605,6 +633,28 @@ export function WorkflowWorkspace({
                 <option value="tesseract">tesseract</option>
               </select>
             </div>
+
+            <label
+              className="inline-flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer whitespace-nowrap"
+              title="启动时自动终止其他运行中脚本并开启验证码风控暂停"
+            >
+              <input
+                id="policy-single-instance"
+                type="checkbox"
+                checked={workflow.policy.preventConcurrentScripts !== false}
+                onChange={(e) =>
+                  onChangeWorkflow({
+                    ...workflow,
+                    policy: {
+                      ...workflow.policy,
+                      preventConcurrentScripts: e.target.checked,
+                    },
+                  })
+                }
+                className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600"
+              />
+              <span>单实例防抢控</span>
+            </label>
 
             <button
               type="button"

@@ -2,16 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createDefaultJDFinanceWorkflow,
+  createDefaultNode,
   createEcommerceSignInWorkflow,
+  createJDCouponCenterWorkflow,
+  createJDMiaoshaBeansWorkflow,
   validateWorkflowIR,
   type LoopBlockParams,
 } from './ir';
 import { compileWorkflowToAutoJs6 } from './codegen';
 
-test('default workflow templates pass validateWorkflowIR with zero errors', () => {
-  for (const wf of [createDefaultJDFinanceWorkflow(), createEcommerceSignInWorkflow()]) {
+test('all four workflow templates pass validateWorkflowIR with zero errors', () => {
+  for (const wf of [
+    createDefaultJDFinanceWorkflow(),
+    createEcommerceSignInWorkflow(),
+    createJDMiaoshaBeansWorkflow(),
+    createJDCouponCenterWorkflow(),
+  ]) {
     const res = validateWorkflowIR(wf);
-    assert.equal(res.valid, true);
+    assert.equal(res.valid, true, `Template ${wf.meta.id} failed validation: ${JSON.stringify(res.issues)}`);
     assert.equal(res.summary.errors, 0);
     assert.equal(res.summary.circularDependencies, 0);
     assert.equal(res.summary.danglingReferences, 0);
@@ -186,4 +194,35 @@ test('isWorkflowIRShape validates malformed payloads and validateWorkflowIR hand
   assert.ok(res.issues.some((i) => i.field === 'candidates' && i.category === 'schema_policy'));
   assert.ok(res.issues.some((i) => i.field === 'xRatio' && i.category === 'schema_policy'));
 });
+
+test('validates dismiss_popup, landing_stay, forbiddenYBand bounds, and JS identifier safety on saveMatchVar', () => {
+  const wf = createJDMiaoshaBeansWorkflow();
+
+  const badPopup = createDefaultNode('dismiss_popup', 'bad1');
+  if (badPopup.type === 'dismiss_popup') {
+    badPopup.params.maxLayers = 20;
+    badPopup.params.fallbackClosePoint = { xRatio: 1.2, yRatio: -0.1 };
+  }
+  const badStay = createDefaultNode('landing_stay', 'bad2');
+  if (badStay.type === 'landing_stay') {
+    badStay.params.targetStaySec = -1;
+    badStay.params.maxBackAttempts = 9;
+  }
+  const badOcr = createDefaultNode('ocr_find', 'bad3');
+  if (badOcr.type === 'ocr_find') {
+    badOcr.params.forbiddenYBand = { y0: 0.4, y1: 0.2 };
+    badOcr.params.saveMatchVar = '123-invalid-var';
+  }
+  wf.nodes.push(badPopup, badStay, badOcr);
+
+  const res = validateWorkflowIR(wf);
+  assert.equal(res.valid, false);
+  assert.ok(res.issues.some((i) => i.nodeId === badPopup.id && i.field === 'maxLayers'));
+  assert.ok(res.issues.some((i) => i.nodeId === badPopup.id && i.field === 'fallbackClosePoint'));
+  assert.ok(res.issues.some((i) => i.nodeId === badStay.id && i.field === 'targetStaySec'));
+  assert.ok(res.issues.some((i) => i.nodeId === badStay.id && i.field === 'maxBackAttempts'));
+  assert.ok(res.issues.some((i) => i.nodeId === badOcr.id && i.field === 'forbiddenYBand'));
+  assert.ok(res.issues.some((i) => i.nodeId === badOcr.id && i.field === 'saveMatchVar'));
+});
+
 

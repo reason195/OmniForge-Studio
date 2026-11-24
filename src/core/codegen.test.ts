@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileWorkflowToAutoJs6 } from './codegen';
-import { createDefaultJDFinanceWorkflow, validateWorkflowIR } from './ir';
+import {
+  createDefaultJDFinanceWorkflow,
+  createEcommerceSignInWorkflow,
+  createJDCouponCenterWorkflow,
+  createJDMiaoshaBeansWorkflow,
+  validateWorkflowIR,
+} from './ir';
 
 test('default JD Finance workflow passes IR validation and compiles self-contained AutoJs6 script', () => {
   const wf = createDefaultJDFinanceWorkflow();
@@ -90,4 +96,41 @@ test('escaping and comment sanitization prevent syntax breakouts while invalid I
   assert.match(invalidRes.script, /Compilation Halted/);
   assert.doesNotMatch(invalidRes.script, /__launchApp\("com\.jd\.jrapp"/);
 });
+
+test('all four templates compile to syntactically valid AutoJs6 scripts with real-world reliability helpers', () => {
+  const templates = [
+    createDefaultJDFinanceWorkflow(),
+    createEcommerceSignInWorkflow(),
+    createJDMiaoshaBeansWorkflow(),
+    createJDCouponCenterWorkflow(),
+  ];
+
+  for (const wf of templates) {
+    const res = compileWorkflowToAutoJs6(wf);
+    assert.equal(res.validation.valid, true, `Template ${wf.meta.id} should be valid`);
+    assert.equal(res.stats.secretScanPassed, true, `Template ${wf.meta.id} should pass secret scan`);
+    assert.doesNotThrow(() => new Function(res.script), `Template ${wf.meta.id} generated invalid JS`);
+  }
+
+  const miaoshaRes = compileWorkflowToAutoJs6(createJDMiaoshaBeansWorkflow());
+  assert.match(miaoshaRes.script, /function __ensureSingleInstance\(/);
+  assert.match(miaoshaRes.script, /function __waitRisk\(/);
+  assert.match(miaoshaRes.script, /function __dismissPopups\(/);
+  assert.match(miaoshaRes.script, /function __doLandingStay\(/);
+  assert.match(miaoshaRes.script, /function __ocrFindCountdown\(/);
+  assert.match(miaoshaRes.script, /function __returnFromCrossApp\(/);
+  assert.match(miaoshaRes.script, /function __findAccessibilityCandidate\(/);
+  assert.match(miaoshaRes.script, /function __isInForbiddenYBand\(/);
+  assert.match(miaoshaRes.script, /"preferAccessibility":true/);
+  assert.match(miaoshaRes.script, /"forbiddenYBand":\{"y0":0\.1,"y1":0\.2\}/);
+  assert.match(miaoshaRes.script, /__clickOcrMatch\(ctx\.vars\["centerActionBtn"\], 0, 0, 2, 600, true\);/);
+  assert.match(miaoshaRes.script, /__dismissPopups\(/);
+  assert.match(miaoshaRes.script, /__doLandingStay\(/);
+
+  const couponRes = compileWorkflowToAutoJs6(createJDCouponCenterWorkflow());
+  assert.match(couponRes.script, /openapp\.jdmobile:\/\/virtual\?params=/);
+  assert.match(couponRes.script, /"xRatio":0\.495,"yRatio":0\.75/);
+  assert.match(couponRes.script, /"targetStaySec":10/);
+});
+
 

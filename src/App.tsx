@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import {
   createDefaultJDFinanceWorkflow,
   createEcommerceSignInWorkflow,
+  createJDCouponCenterWorkflow,
+  createJDMiaoshaBeansWorkflow,
   validateWorkflowIR,
   type WorkflowIR,
 } from './core/ir';
 import { compileWorkflowToAutoJs6, type ApiContractEndpoint } from './core/codegen';
 import { TopBar, type StudioTab } from './components/TopBar';
-import { WorkflowWorkspace } from './components/WorkflowWorkspace';
+import { WorkflowWorkspace, type WorkflowTemplateId } from './components/WorkflowWorkspace';
 import { McpTrafficStudio } from './components/McpTrafficStudio';
 import { CodeExportView } from './components/CodeExportView';
 import { NativeArchitectureView } from './components/NativeArchitectureView';
@@ -33,9 +35,15 @@ export default function App() {
     [workflow, apiContractEndpoints],
   );
 
-  const handleLoadTemplate = (templateId: 'jd' | 'signin') => {
+  const handleLoadTemplate = (templateId: WorkflowTemplateId) => {
     const next =
-      templateId === 'jd' ? createDefaultJDFinanceWorkflow() : createEcommerceSignInWorkflow();
+      templateId === 'jd'
+        ? createDefaultJDFinanceWorkflow()
+        : templateId === 'miaosha'
+          ? createJDMiaoshaBeansWorkflow()
+          : templateId === 'coupon'
+            ? createJDCouponCenterWorkflow()
+            : createEcommerceSignInWorkflow();
     setWorkflow(next);
     setSelectedNodeId(next.nodes[0]?.id ?? null);
   };

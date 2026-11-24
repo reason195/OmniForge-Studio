@@ -1,6 +1,8 @@
 import type {
   BackCheckParams,
   ClickTargetParams,
+  DismissPopupParams,
+  LandingStayParams,
   LaunchAppParams,
   LlmRefineParams,
   LoopBlockParams,
@@ -246,6 +248,309 @@ export function NodeInspector({ node, onUpdateNode }: NodeInspectorProps) {
                 </select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3 items-center pt-1">
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input
+                  id="back-dismiss-retention"
+                  type="checkbox"
+                  checked={p.dismissRetentionPopups ?? true}
+                  onChange={(e) => updateParams({ dismissRetentionPopups: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600"
+                />
+                <span>自动清理离场挽留弹窗</span>
+              </label>
+              <div>
+                <label htmlFor="back-extra-backs" className="block text-xs font-medium text-slate-700 mb-1">
+                  未达基准页补返回次数
+                </label>
+                <input
+                  id="back-extra-backs"
+                  type="number"
+                  min={0}
+                  max={5}
+                  value={p.maxExtraBacks ?? 2}
+                  onChange={(e) => updateParams({ maxExtraBacks: Math.max(0, Number(e.target.value) || 0) })}
+                  className="w-full px-3 py-1.5 text-sm font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {node.type === 'dismiss_popup' && (() => {
+        const p = node.params as DismissPopupParams;
+        return (
+          <div className="space-y-3">
+            {p.fallbackClosePoint && (
+              <PhoneRegionPreview
+                mode="point"
+                point={{
+                  xRatio: p.fallbackClosePoint.xRatio,
+                  yRatio: p.fallbackClosePoint.yRatio,
+                  offsetXRatio: 0,
+                  offsetYRatio: 0,
+                }}
+              />
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="popup-max-layers" className="block text-xs font-medium text-slate-700 mb-1">
+                  最大叠层清理轮数 (1–10)
+                </label>
+                <input
+                  id="popup-max-layers"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={p.maxLayers}
+                  onChange={(e) => updateParams({ maxLayers: Math.max(1, Number(e.target.value) || 1) })}
+                  className="w-full px-3 py-1.5 text-sm font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label htmlFor="popup-wait-ms" className="block text-xs font-medium text-slate-700 mb-1">
+                  关闭后等待 (ms)
+                </label>
+                <input
+                  id="popup-wait-ms"
+                  type="number"
+                  step={100}
+                  min={200}
+                  value={p.waitAfterClickMs}
+                  onChange={(e) => updateParams({ waitAfterClickMs: Number(e.target.value) || 800 })}
+                  className="w-full px-3 py-1.5 text-sm font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="popup-keywords" className="block text-xs font-medium text-slate-700 mb-1">
+                弹窗关闭/领奖按钮词（逗号分隔，优先精准匹配）
+              </label>
+              <input
+                id="popup-keywords"
+                type="text"
+                value={p.dismissKeywords.join(', ')}
+                onChange={(e) =>
+                  updateParams({
+                    dismissKeywords: e.target.value
+                      .split(/[,，]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+                className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="popup-a11y-close"
+                type="checkbox"
+                checked={p.useAccessibilityClose}
+                onChange={(e) => updateParams({ useAccessibilityClose: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>优先通过无障碍 desc/id 查找弹窗关闭 X 控件</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="popup-enable-fallback-pt"
+                type="checkbox"
+                checked={Boolean(p.fallbackClosePoint)}
+                onChange={(e) =>
+                  updateParams({
+                    fallbackClosePoint: e.target.checked ? { xRatio: 0.495, yRatio: 0.75 } : undefined,
+                  })
+                }
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>启用底部/悬浮图形 X 归一化坐标兜底</span>
+            </label>
+            {p.fallbackClosePoint && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="popup-fallback-x" className="block text-xs font-medium text-slate-700 mb-1">
+                    兜底 X 比例 (0–1)
+                  </label>
+                  <input
+                    id="popup-fallback-x"
+                    type="number"
+                    step={0.005}
+                    min={0}
+                    max={1}
+                    value={p.fallbackClosePoint.xRatio}
+                    onChange={(e) =>
+                      updateParams({
+                        fallbackClosePoint: {
+                          xRatio: Number(e.target.value),
+                          yRatio: p.fallbackClosePoint?.yRatio ?? 0.75,
+                        },
+                      })
+                    }
+                    className="w-full px-3 py-1.5 text-xs font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="popup-fallback-y" className="block text-xs font-medium text-slate-700 mb-1">
+                    兜底 Y 比例 (0–1)
+                  </label>
+                  <input
+                    id="popup-fallback-y"
+                    type="number"
+                    step={0.005}
+                    min={0}
+                    max={1}
+                    value={p.fallbackClosePoint.yRatio}
+                    onChange={(e) =>
+                      updateParams({
+                        fallbackClosePoint: {
+                          xRatio: p.fallbackClosePoint?.xRatio ?? 0.495,
+                          yRatio: Number(e.target.value),
+                        },
+                      })
+                    }
+                    className="w-full px-3 py-1.5 text-xs font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                  />
+                </div>
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="popup-fallback-back"
+                type="checkbox"
+                checked={p.fallbackBackOnMiss}
+                onChange={(e) => updateParams({ fallbackBackOnMiss: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>检测到遮挡弹窗且按钮未命中时触发一次 back()</span>
+            </label>
+          </div>
+        );
+      })()}
+
+      {node.type === 'landing_stay' && (() => {
+        const p = node.params as LandingStayParams;
+        return (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label htmlFor="stay-target-sec" className="block text-xs font-medium text-slate-700 mb-1">
+                  目标停留 (s)
+                </label>
+                <input
+                  id="stay-target-sec"
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={p.targetStaySec}
+                  onChange={(e) => updateParams({ targetStaySec: Math.max(1, Number(e.target.value) || 10) })}
+                  className="w-full px-2.5 py-1.5 text-sm font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label htmlFor="stay-buffer-sec" className="block text-xs font-medium text-slate-700 mb-1">
+                  缓冲秒数 (s)
+                </label>
+                <input
+                  id="stay-buffer-sec"
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={p.extraBufferSec}
+                  onChange={(e) => updateParams({ extraBufferSec: Math.max(0, Number(e.target.value) || 0) })}
+                  className="w-full px-2.5 py-1.5 text-sm font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label htmlFor="stay-max-backs" className="block text-xs font-medium text-slate-700 mb-1">
+                  最多返回次
+                </label>
+                <input
+                  id="stay-max-backs"
+                  type="number"
+                  min={1}
+                  max={6}
+                  value={p.maxBackAttempts}
+                  onChange={(e) => updateParams({ maxBackAttempts: Math.max(1, Number(e.target.value) || 2) })}
+                  className="w-full px-2.5 py-1.5 text-sm font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="stay-return-kw" className="block text-xs font-medium text-slate-700 mb-1">
+                  完成后立即返回词
+                </label>
+                <input
+                  id="stay-return-kw"
+                  type="text"
+                  value={p.returnButtonKeyword}
+                  onChange={(e) => updateParams({ returnButtonKeyword: e.target.value })}
+                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label htmlFor="stay-base-kw" className="block text-xs font-medium text-slate-700 mb-1">
+                  基准页校验关键词
+                </label>
+                <input
+                  id="stay-base-kw"
+                  type="text"
+                  value={p.verifyBaseKeyword}
+                  onChange={(e) => updateParams({ verifyBaseKeyword: e.target.value })}
+                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="stay-retention-kws" className="block text-xs font-medium text-slate-700 mb-1">
+                离场挽留弹窗词（逗号分隔，如 暂时离开 / 确定离开）
+              </label>
+              <input
+                id="stay-retention-kws"
+                type="text"
+                value={p.retentionKeywords.join(', ')}
+                onChange={(e) =>
+                  updateParams({
+                    retentionKeywords: e.target.value
+                      .split(/[,，]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+                className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-md"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="stay-detect-countdown"
+                type="checkbox"
+                checked={p.detectCountdown}
+                onChange={(e) => updateParams({ detectCountdown: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>动态识别页面倒计时（自动过滤顶部状态栏时钟）</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="stay-cross-app"
+                type="checkbox"
+                checked={p.handleCrossAppGestureBack}
+                onChange={(e) => updateParams({ handleCrossAppGestureBack: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>拉起第三方 App 时通过底部手势条横滑切回目标 App</span>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="stay-dismiss-retention"
+                type="checkbox"
+                checked={p.dismissRetentionPopups}
+                onChange={(e) => updateParams({ dismissRetentionPopups: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>返回时启用 3 层离场挽留弹窗与图形 X 兜底</span>
+            </label>
           </div>
         );
       })()}
@@ -363,6 +668,80 @@ export function NodeInspector({ node, onUpdateNode }: NodeInspectorProps) {
               />
               <span>optional: true（未命中时不强制中断当前分支）</span>
             </label>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="ocr-prefer-a11y"
+                type="checkbox"
+                checked={Boolean(p.preferAccessibility)}
+                onChange={(e) => updateParams({ preferAccessibility: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>无障碍优先（先查 desc/text 控件，未命中再回退 OCR）</span>
+            </label>
+            <div className="pt-1 border-t border-slate-100 space-y-2">
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input
+                  id="ocr-forbidden-band-toggle"
+                  type="checkbox"
+                  checked={Boolean(p.forbiddenYBand)}
+                  onChange={(e) =>
+                    updateParams({
+                      forbiddenYBand: e.target.checked ? { y0: 0.1, y1: 0.2 } : undefined,
+                    })
+                  }
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600"
+                />
+                <span>启用 Y 轴禁点隔离带（防误点顶部频道 Tab）</span>
+              </label>
+              {p.forbiddenYBand && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="ocr-forbid-y0" className="block text-[11px] font-mono text-slate-600 mb-1">
+                      禁点上界 y0 (0–1)
+                    </label>
+                    <input
+                      id="ocr-forbid-y0"
+                      type="number"
+                      step={0.01}
+                      min={0}
+                      max={1}
+                      value={p.forbiddenYBand.y0}
+                      onChange={(e) =>
+                        updateParams({
+                          forbiddenYBand: {
+                            y0: Number(e.target.value),
+                            y1: p.forbiddenYBand?.y1 ?? 0.2,
+                          },
+                        })
+                      }
+                      className="w-full px-2 py-1 text-xs font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ocr-forbid-y1" className="block text-[11px] font-mono text-slate-600 mb-1">
+                      禁点下界 y1 (0–1)
+                    </label>
+                    <input
+                      id="ocr-forbid-y1"
+                      type="number"
+                      step={0.01}
+                      min={0}
+                      max={1}
+                      value={p.forbiddenYBand.y1}
+                      onChange={(e) =>
+                        updateParams({
+                          forbiddenYBand: {
+                            y0: p.forbiddenYBand?.y0 ?? 0.1,
+                            y1: Number(e.target.value),
+                          },
+                        })
+                      }
+                      className="w-full px-2 py-1 text-xs font-mono tabular-nums bg-white border border-slate-300 rounded-md"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
@@ -503,6 +882,16 @@ export function NodeInspector({ node, onUpdateNode }: NodeInspectorProps) {
                 />
               </div>
             </div>
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                id="click-prefer-node"
+                type="checkbox"
+                checked={Boolean(p.preferNodeClick)}
+                onChange={(e) => updateParams({ preferNodeClick: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-blue-600"
+              />
+              <span>优先调用控件 node.click()（适配 H5/WebView 浮层按钮，失败再退化坐标点击）</span>
+            </label>
           </div>
         );
       })()}

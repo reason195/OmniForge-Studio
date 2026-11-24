@@ -4,6 +4,8 @@ export type NodeType =
   | 'launch_app'
   | 'scheme_jump'
   | 'back_check'
+  | 'dismiss_popup'
+  | 'landing_stay'
   | 'ocr_find'
   | 'click_target'
   | 'swipe_wait'
@@ -36,6 +38,32 @@ export interface BackCheckParams {
   intervalMs: number;
   expectKeyword: string;
   ocrEngine: 'paddle' | 'mlkit' | 'tesseract';
+  dismissRetentionPopups?: boolean;
+  maxExtraBacks?: number;
+}
+
+export interface DismissPopupParams {
+  maxLayers: number;
+  dismissKeywords: string[];
+  useAccessibilityClose: boolean;
+  fallbackClosePoint?: {
+    xRatio: number;
+    yRatio: number;
+  };
+  fallbackBackOnMiss: boolean;
+  waitAfterClickMs: number;
+}
+
+export interface LandingStayParams {
+  targetStaySec: number;
+  extraBufferSec: number;
+  detectCountdown: boolean;
+  returnButtonKeyword: string;
+  handleCrossAppGestureBack: boolean;
+  dismissRetentionPopups: boolean;
+  retentionKeywords: string[];
+  verifyBaseKeyword: string;
+  maxBackAttempts: number;
 }
 
 export interface OcrFindParams {
@@ -46,6 +74,11 @@ export interface OcrFindParams {
   region: NormalizedRegion;
   saveMatchVar: string;
   optional: boolean;
+  preferAccessibility?: boolean;
+  forbiddenYBand?: {
+    y0: number;
+    y1: number;
+  };
 }
 
 export interface ClickTargetParams {
@@ -58,6 +91,7 @@ export interface ClickTargetParams {
   waitAfterMs: number;
   maxRetries: number;
   retryDelayMs: number;
+  preferNodeClick?: boolean;
 }
 
 export interface SwipeWaitParams {
@@ -103,6 +137,8 @@ export type NodeParamsMap = {
   launch_app: LaunchAppParams;
   scheme_jump: SchemeJumpParams;
   back_check: BackCheckParams;
+  dismiss_popup: DismissPopupParams;
+  landing_stay: LandingStayParams;
   ocr_find: OcrFindParams;
   click_target: ClickTargetParams;
   swipe_wait: SwipeWaitParams;
@@ -138,6 +174,9 @@ export interface WatchdogPolicy {
   globalRecoveryAction: 'home_and_exit' | 'back_to_app' | 'exit_only';
   ocrDefaultEngine: 'paddle' | 'mlkit' | 'tesseract';
   safeSleepSliceMs: number;
+  preventConcurrentScripts?: boolean;
+  riskKeywords?: string[];
+  riskWaitTimeoutMs?: number;
 }
 
 export interface WorkflowVariable {
@@ -219,21 +258,35 @@ export const BLOCK_CATALOG: BlockCatalogItem[] = [
     type: 'back_check',
     category: 'navigation',
     title: '返回与页面校验',
-    summary: '执行次数可控的返回并检查基准页关键词',
+    summary: '多层返回 + 离场弹窗清理并校验基准页关键词',
     defaultLabel: '返回并校验任务列表',
+  },
+  {
+    type: 'dismiss_popup',
+    category: 'navigation',
+    title: '多层弹窗清理',
+    summary: '无障碍关闭 -> OCR 文案 -> 底部图形 X 多层关闭',
+    defaultLabel: '清理多层遮挡/奖励弹窗',
+  },
+  {
+    type: 'landing_stay',
+    category: 'flow_watchdog',
+    title: '落地页智能停留',
+    summary: '倒计时归零 + 跨App横滑切回 + 离场挽留弹窗处理',
+    defaultLabel: '落地页倒计时停留并安全返回',
   },
   {
     type: 'ocr_find',
     category: 'ocr_screen',
-    title: 'OCR 识字查找',
-    summary: '基于归一化区域与多候选词优先级识字',
-    defaultLabel: 'OCR 识别任务按钮',
+    title: 'OCR/控件混合查找',
+    summary: '无障碍优先 + 归一化区域 OCR + 防误触禁点带',
+    defaultLabel: '识别任务按钮',
   },
   {
     type: 'click_target',
     category: 'ocr_screen',
     title: '识字/比例点击',
-    summary: '支持 offsetXRatio/offsetYRatio 偏移与失败重试',
+    summary: '支持 node.click() 优先、偏移点击与失败重试',
     defaultLabel: '点击目标控件',
   },
   {
@@ -303,16 +356,51 @@ export function createDefaultNode(type: NodeType, idSuffix: string): WorkflowNod
         enabled: true,
         params: {
           times: 1,
-          intervalMs: 800,
+          intervalMs: 1200,
           expectKeyword: '每日任务',
           ocrEngine: 'paddle',
+          dismissRetentionPopups: true,
+          maxExtraBacks: 2,
+        },
+      };
+    case 'dismiss_popup':
+      return {
+        id,
+        type,
+        label: '清理多层遮挡/奖励弹窗',
+        enabled: true,
+        params: {
+          maxLayers: 4,
+          dismissKeywords: ['暂时离开', '关闭', '开心收下', '我知道了', '以后再说', '取消'],
+          useAccessibilityClose: true,
+          fallbackClosePoint: { xRatio: 0.495, yRatio: 0.75 },
+          fallbackBackOnMiss: false,
+          waitAfterClickMs: 1200,
+        },
+      };
+    case 'landing_stay':
+      return {
+        id,
+        type,
+        label: '落地页倒计时停留并安全返回',
+        enabled: true,
+        params: {
+          targetStaySec: 15,
+          extraBufferSec: 2,
+          detectCountdown: true,
+          returnButtonKeyword: '立即返回',
+          handleCrossAppGestureBack: true,
+          dismissRetentionPopups: true,
+          retentionKeywords: ['暂时离开', '确定离开', '残忍离开', '放弃福利', '取消'],
+          verifyBaseKeyword: '做任务',
+          maxBackAttempts: 2,
         },
       };
     case 'ocr_find':
       return {
         id,
         type,
-        label: 'OCR 查找可执行按钮',
+        label: 'OCR/控件混合查找可执行按钮',
         enabled: true,
         params: {
           engine: 'paddle',
@@ -322,6 +410,7 @@ export function createDefaultNode(type: NodeType, idSuffix: string): WorkflowNod
           region: { x0: 0.58, y0: 0.22, x1: 0.96, y1: 0.88 },
           saveMatchVar: 'matchedTaskBtn',
           optional: false,
+          preferAccessibility: true,
         },
       };
     case 'click_target':
@@ -340,6 +429,7 @@ export function createDefaultNode(type: NodeType, idSuffix: string): WorkflowNod
           waitAfterMs: 2200,
           maxRetries: 2,
           retryDelayMs: 600,
+          preferNodeClick: true,
         },
       };
     case 'swipe_wait':
@@ -467,6 +557,9 @@ export function createDefaultJDFinanceWorkflow(): WorkflowIR {
       globalRecoveryAction: 'home_and_exit',
       ocrDefaultEngine: 'paddle',
       safeSleepSliceMs: 250,
+      preventConcurrentScripts: true,
+      riskKeywords: ['检测到安全风险', '京东验证', '请完成验证', '安全验证'],
+      riskWaitTimeoutMs: 90000,
     },
     nodes: [
       {
@@ -701,6 +794,381 @@ export function createEcommerceSignInWorkflow(): WorkflowIR {
           waitAfterMs: 1800,
           maxRetries: 3,
           retryDelayMs: 600,
+          preferNodeClick: true,
+        },
+      },
+    ],
+  };
+}
+
+export function createJDMiaoshaBeansWorkflow(): WorkflowIR {
+  return {
+    schemaVersion: '1.0.0',
+    meta: {
+      id: 'wf_jd_miaosha_beans_03',
+      name: '京东秒杀·天天领豆（实战状态机模板）',
+      description:
+        '源自真机实战调优：单实例防抢控 + 风控暂停 + 无障碍优先定位中央按钮（刮下一张/立即刮卡/做任务解锁刮卡）+ 15+2s 倒计时停留 + 跨 App 手势切回 + 「暂时离开/专属券」三层离场弹窗兜底。',
+      targetPlatform: 'android-autojs6',
+      appPackage: 'com.jingdong.app.mall',
+      updatedAt: '2026-11-24T06:00:00.000Z',
+    },
+    variables: {
+      refinedKeywords: {
+        key: 'refinedKeywords',
+        value: ['刮下一张', '立即刮卡', '做任务解锁刮卡', '继续刮卡'],
+        fallbackValue: ['刮下一张', '立即刮卡', '做任务解锁刮卡'],
+        source: 'mcp_llm_compiled',
+        description: '按实战优先级排序：情况C(刮下一张) > 情况A(立即刮卡) > 情况B(做任务解锁刮卡)',
+      },
+      browseWaitMs: {
+        key: 'browseWaitMs',
+        value: 17000,
+        fallbackValue: 17000,
+        source: 'user',
+        description: '15秒浏览任务 + 2秒网络缓冲',
+      },
+    },
+    mcpBindings: [
+      {
+        serverId: 'autojs6',
+        name: 'AutoJs6 Device MCP',
+        endpointUrl: 'http://127.0.0.1:9317/mcp',
+        transport: 'local-bridge',
+        timeoutMs: 4000,
+        enabled: true,
+      },
+      {
+        serverId: 'proxypin',
+        name: 'ProxyPin Traffic MCP',
+        endpointUrl: 'http://127.0.0.1:9318/mcp',
+        transport: 'local-bridge',
+        timeoutMs: 4000,
+        enabled: false,
+      },
+    ],
+    policy: {
+      globalTimeoutMs: 300000,
+      defaultRoundTimeoutMs: 45000,
+      globalRecoveryAction: 'back_to_app',
+      ocrDefaultEngine: 'paddle',
+      safeSleepSliceMs: 250,
+      preventConcurrentScripts: true,
+      riskKeywords: ['检测到安全风险', '京东验证', '请完成验证', '安全验证'],
+      riskWaitTimeoutMs: 90000,
+    },
+    nodes: [
+      {
+        id: 'node_ms_launch_1',
+        type: 'launch_app',
+        label: '启动京东主客户端',
+        enabled: true,
+        params: {
+          packageName: 'com.jingdong.app.mall',
+          waitMs: 3200,
+          verifyForeground: true,
+        },
+      },
+      {
+        id: 'node_ms_popup_2',
+        type: 'dismiss_popup',
+        label: '清理开屏与奖励遮挡弹窗（绝不误点稍后再说）',
+        enabled: true,
+        params: {
+          maxLayers: 3,
+          dismissKeywords: ['开心收下', '我知道了', '以后再说', '暂不开启', '关闭'],
+          useAccessibilityClose: true,
+          fallbackClosePoint: { xRatio: 0.495, yRatio: 0.898 },
+          fallbackBackOnMiss: false,
+          waitAfterClickMs: 1000,
+        },
+      },
+      {
+        id: 'node_ms_loop_3',
+        type: 'loop_block',
+        label: '天天领豆主循环（连续 3 次无推进安全退出）',
+        enabled: true,
+        params: {
+          loopType: 'count',
+          maxIterations: 40,
+          conditionExpr: 'missStreak < 3',
+          breakWhenMissStreak: 3,
+          missVar: 'centerActionBtn',
+          perRoundTimeoutMs: 45000,
+          roundRecoveryAction: 'back',
+          children: [
+            {
+              id: 'node_ms_ocr_3_1',
+              type: 'ocr_find',
+              label: '定位「刮下一张 / 立即刮卡 / 做任务解锁刮卡」（禁点顶部Tab）',
+              enabled: true,
+              params: {
+                engine: 'paddle',
+                matchMode: 'contains',
+                candidates: ['刮下一张', '立即刮卡', '做任务解锁刮卡'],
+                variableRef: 'refinedKeywords',
+                region: { x0: 0.12, y0: 0.28, x1: 0.88, y1: 0.78 },
+                saveMatchVar: 'centerActionBtn',
+                optional: false,
+                preferAccessibility: true,
+                forbiddenYBand: { y0: 0.1, y1: 0.2 },
+              },
+            },
+            {
+              id: 'node_ms_click_3_2',
+              type: 'click_target',
+              label: '点击中央主按钮（不点卡片展示区）',
+              enabled: true,
+              params: {
+                mode: 'ocr_result',
+                targetVar: 'centerActionBtn',
+                xRatio: 0.5,
+                yRatio: 0.34,
+                offsetXRatio: 0,
+                offsetYRatio: 0,
+                waitAfterMs: 2000,
+                maxRetries: 2,
+                retryDelayMs: 600,
+                preferNodeClick: true,
+              },
+            },
+            {
+              id: 'node_ms_stay_3_3',
+              type: 'landing_stay',
+              label: '落地页 15+2s 倒计时停留与离场挽留弹窗处理',
+              enabled: true,
+              params: {
+                targetStaySec: 15,
+                extraBufferSec: 2,
+                detectCountdown: true,
+                returnButtonKeyword: '立即返回',
+                handleCrossAppGestureBack: true,
+                dismissRetentionPopups: true,
+                retentionKeywords: [
+                  '暂时离开',
+                  '确定离开',
+                  '残忍离开',
+                  '放弃福利',
+                  '取消',
+                ],
+                verifyBaseKeyword: '刮卡',
+                maxBackAttempts: 2,
+              },
+            },
+            {
+              id: 'node_ms_post_popup_3_4',
+              type: 'dismiss_popup',
+              label: '关闭刮卡奖励层并保持基准页',
+              enabled: true,
+              params: {
+                maxLayers: 2,
+                dismissKeywords: ['继续刮卡', '再刮一次', '开心收下', '我知道了', '关闭'],
+                useAccessibilityClose: true,
+                fallbackClosePoint: { xRatio: 0.495, yRatio: 0.898 },
+                fallbackBackOnMiss: false,
+                waitAfterClickMs: 800,
+              },
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+export function createJDCouponCenterWorkflow(): WorkflowIR {
+  return {
+    schemaVersion: '1.0.0',
+    meta: {
+      id: 'wf_jd_coupon_center_04',
+      name: '京东领券中心·双层弹窗与浮层任务（实战模板）',
+      description:
+        '源自领券中心 v13.2 实战调优：深链直达 BabelActivity -> 4层叠加弹窗清理（含图形 X 坐标兜底）-> node.click() 打开「签到抽券/天天赚京豆」任务浮层 -> 10+2s 智能停留与多级返回。',
+      targetPlatform: 'android-autojs6',
+      appPackage: 'com.jingdong.app.mall',
+      updatedAt: '2026-11-24T06:00:00.000Z',
+    },
+    variables: {
+      couponCenterParams: {
+        key: 'couponCenterParams',
+        value:
+          '{"needLogin":"0","des":"m","category":"jump","url":"https://pro.m.jd.com/mall/active/VAjs3vpayA513UwxL5XC4eGBXqY/index.html"}',
+        fallbackValue:
+          '{"needLogin":"0","des":"m","category":"jump","url":"https://pro.m.jd.com/mall/active/VAjs3vpayA513UwxL5XC4eGBXqY/index.html"}',
+        source: 'user',
+        description: '领券中心 openapp.jdmobile 深链 JSON 参数',
+      },
+      entryKeywords: {
+        key: 'entryKeywords',
+        value: ['签到抽券', '签到领券', '立即领奖', '更多任务', '去砸蛋'],
+        fallbackValue: ['签到抽券', '立即领奖', '领更多'],
+        source: 'mcp_llm_compiled',
+        description: '入口与二阶段任务浮层触发按钮词（排除「已连续签到0天」）',
+      },
+      refinedKeywords: {
+        key: 'refinedKeywords',
+        value: ['去领奖', '领取', '去完成', '去逛逛', '去浏览'],
+        fallbackValue: ['去领奖', '去完成', '去浏览'],
+        source: 'mcp_llm_compiled',
+        description: '任务浮层右侧可执行动作按钮词',
+      },
+    },
+    mcpBindings: [
+      {
+        serverId: 'autojs6',
+        name: 'AutoJs6 Device MCP',
+        endpointUrl: 'http://127.0.0.1:9317/mcp',
+        transport: 'local-bridge',
+        timeoutMs: 4000,
+        enabled: true,
+      },
+      {
+        serverId: 'proxypin',
+        name: 'ProxyPin Traffic MCP',
+        endpointUrl: 'http://127.0.0.1:9318/mcp',
+        transport: 'local-bridge',
+        timeoutMs: 4000,
+        enabled: false,
+      },
+    ],
+    policy: {
+      globalTimeoutMs: 240000,
+      defaultRoundTimeoutMs: 36000,
+      globalRecoveryAction: 'back_to_app',
+      ocrDefaultEngine: 'paddle',
+      safeSleepSliceMs: 250,
+      preventConcurrentScripts: true,
+      riskKeywords: ['检测到安全风险', '京东验证', '请完成验证', '安全验证'],
+      riskWaitTimeoutMs: 90000,
+    },
+    nodes: [
+      {
+        id: 'node_cc_scheme_1',
+        type: 'scheme_jump',
+        label: '深链直达领券中心 BabelActivity',
+        enabled: true,
+        params: {
+          schemeTemplate: 'openapp.jdmobile://virtual?params=${couponCenterParams}',
+          encodeParams: true,
+          waitMs: 4000,
+          fallbackPackage: 'com.jingdong.app.mall',
+        },
+      },
+      {
+        id: 'node_cc_popup_2',
+        type: 'dismiss_popup',
+        label: '连续清理最多 4 层叠加弹窗（成功抽中 + 恭喜获得 + 图形 X 兜底）',
+        enabled: true,
+        params: {
+          maxLayers: 4,
+          dismissKeywords: ['关闭', '×', 'X', '我知道了', '以后再说', '暂不开启', '取消'],
+          useAccessibilityClose: true,
+          fallbackClosePoint: { xRatio: 0.495, yRatio: 0.75 },
+          fallbackBackOnMiss: false,
+          waitAfterClickMs: 1200,
+        },
+      },
+      {
+        id: 'node_cc_entry_ocr_3',
+        type: 'ocr_find',
+        label: '定位「签到抽券 / 立即领奖 / 更多任务」入口',
+        enabled: true,
+        params: {
+          engine: 'paddle',
+          matchMode: 'contains',
+          candidates: ['签到抽券', '立即领奖', '更多任务'],
+          variableRef: 'entryKeywords',
+          region: { x0: 0.05, y0: 0.12, x1: 0.95, y1: 0.75 },
+          saveMatchVar: 'drawerEntryBtn',
+          optional: true,
+          preferAccessibility: true,
+        },
+      },
+      {
+        id: 'node_cc_entry_click_4',
+        type: 'click_target',
+        label: '优先 node.click() 展开任务浮层',
+        enabled: true,
+        params: {
+          mode: 'ocr_result',
+          targetVar: 'drawerEntryBtn',
+          xRatio: 0.5,
+          yRatio: 0.5,
+          offsetXRatio: 0,
+          offsetYRatio: 0,
+          waitAfterMs: 2200,
+          maxRetries: 2,
+          retryDelayMs: 700,
+          preferNodeClick: true,
+        },
+      },
+      {
+        id: 'node_cc_loop_5',
+        type: 'loop_block',
+        label: '任务浮层浏览循环（连续 3 次无命中退出）',
+        enabled: true,
+        params: {
+          loopType: 'count',
+          maxIterations: 30,
+          conditionExpr: 'missStreak < 3',
+          breakWhenMissStreak: 3,
+          missVar: 'matchedTaskBtn',
+          perRoundTimeoutMs: 36000,
+          roundRecoveryAction: 'back',
+          children: [
+            {
+              id: 'node_cc_ocr_5_1',
+              type: 'ocr_find',
+              label: '识别任务浮层右侧「去领奖 / 去完成」按钮',
+              enabled: true,
+              params: {
+                engine: 'paddle',
+                matchMode: 'contains',
+                candidates: ['去领奖', '领取', '去完成', '去逛逛'],
+                variableRef: 'refinedKeywords',
+                region: { x0: 0.64, y0: 0.35, x1: 0.96, y1: 0.92 },
+                saveMatchVar: 'matchedTaskBtn',
+                optional: false,
+                preferAccessibility: true,
+                forbiddenYBand: { y0: 0.08, y1: 0.19 },
+              },
+            },
+            {
+              id: 'node_cc_click_5_2',
+              type: 'click_target',
+              label: '点击任务右侧动作按钮',
+              enabled: true,
+              params: {
+                mode: 'ocr_result',
+                targetVar: 'matchedTaskBtn',
+                xRatio: 0.8,
+                yRatio: 0.55,
+                offsetXRatio: 0,
+                offsetYRatio: 0,
+                waitAfterMs: 1800,
+                maxRetries: 2,
+                retryDelayMs: 500,
+                preferNodeClick: true,
+              },
+            },
+            {
+              id: 'node_cc_stay_5_3',
+              type: 'landing_stay',
+              label: '落地页 10+2s 停留 + 离场弹窗清理并回归浮层',
+              enabled: true,
+              params: {
+                targetStaySec: 10,
+                extraBufferSec: 2,
+                detectCountdown: true,
+                returnButtonKeyword: '立即返回',
+                handleCrossAppGestureBack: true,
+                dismissRetentionPopups: true,
+                retentionKeywords: ['暂时离开', '确定离开', '残忍离开', '放弃福利', '取消'],
+                verifyBaseKeyword: '京豆',
+                maxBackAttempts: 2,
+              },
+            },
+          ],
         },
       },
     ],
@@ -709,6 +1177,7 @@ export function createEcommerceSignInWorkflow(): WorkflowIR {
 
 const SUSPICIOUS_SECRET_VALUE = /(AIza[0-9A-Za-z_-]{20,}|sk-[0-9A-Za-z]{16,}|ghp_[0-9A-Za-z]{20,}|Bearer\s+[A-Za-z0-9._-]{16,})/i;
 const TEMPLATE_VAR_REGEX = /\$\{([a-zA-Z0-9_]+)\}/g;
+const VALID_JS_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 function isVariablePopulated(variable: WorkflowVariable | undefined): boolean {
   if (!variable) return false;
@@ -980,6 +1449,82 @@ export function validateWorkflowIR(ir: WorkflowIR): ValidationResult {
         }
       }
 
+      if (node.type === 'back_check') {
+        const p = node.params as BackCheckParams;
+        if (p.times < 1 || p.times > 10) {
+          issues.push({
+            level: 'warning',
+            category: 'schema_policy',
+            nodeId: node.id,
+            field: 'times',
+            message: `返回节点「${node.label}」返回次数建议在 1~10 次之间。`,
+          });
+        }
+      }
+
+      if (node.type === 'dismiss_popup') {
+        const p = node.params as DismissPopupParams;
+        if (!Number.isFinite(p.maxLayers) || p.maxLayers < 1 || p.maxLayers > 10) {
+          issues.push({
+            level: 'error',
+            category: 'schema_policy',
+            nodeId: node.id,
+            field: 'maxLayers',
+            message: `弹窗清理节点「${node.label}」最大层级 (maxLayers) 需在 1~10 之间。`,
+          });
+        }
+        if (p.fallbackClosePoint) {
+          const { xRatio, yRatio } = p.fallbackClosePoint;
+          if (
+            !Number.isFinite(xRatio) ||
+            !Number.isFinite(yRatio) ||
+            xRatio < 0 ||
+            xRatio > 1 ||
+            yRatio < 0 ||
+            yRatio > 1
+          ) {
+            issues.push({
+              level: 'error',
+              category: 'schema_policy',
+              nodeId: node.id,
+              field: 'fallbackClosePoint',
+              message: `弹窗清理节点「${node.label}」兜底图形 X 坐标越界（需满足 0 <= xRatio, yRatio <= 1）。`,
+            });
+          }
+        }
+      }
+
+      if (node.type === 'landing_stay') {
+        const p = node.params as LandingStayParams;
+        if (!Number.isFinite(p.targetStaySec) || p.targetStaySec < 0 || p.targetStaySec > 180) {
+          issues.push({
+            level: 'error',
+            category: 'schema_policy',
+            nodeId: node.id,
+            field: 'targetStaySec',
+            message: `落地页停留节点「${node.label}」目标秒数需在 0~180 秒之间。`,
+          });
+        }
+        if (!Number.isFinite(p.extraBufferSec) || p.extraBufferSec < 0 || p.extraBufferSec > 30) {
+          issues.push({
+            level: 'error',
+            category: 'schema_policy',
+            nodeId: node.id,
+            field: 'extraBufferSec',
+            message: `落地页停留节点「${node.label}」缓冲秒数需在 0~30 秒之间。`,
+          });
+        }
+        if (!Number.isFinite(p.maxBackAttempts) || p.maxBackAttempts < 1 || p.maxBackAttempts > 6) {
+          issues.push({
+            level: 'error',
+            category: 'schema_policy',
+            nodeId: node.id,
+            field: 'maxBackAttempts',
+            message: `落地页停留节点「${node.label}」最大补发返回次数需在 1~6 之间。`,
+          });
+        }
+      }
+
       if (node.type === 'scheme_jump') {
         const p = node.params as SchemeJumpParams;
         if (!p.schemeTemplate.includes('://')) {
@@ -1132,6 +1677,18 @@ export function validateWorkflowIR(ir: WorkflowIR): ValidationResult {
             }
           }
         }
+        if (p.forbiddenYBand) {
+          const { y0, y1 } = p.forbiddenYBand;
+          if (!Number.isFinite(y0) || !Number.isFinite(y1) || y0 < 0 || y1 > 1 || y0 >= y1) {
+            issues.push({
+              level: 'error',
+              category: 'schema_policy',
+              nodeId: node.id,
+              field: 'forbiddenYBand',
+              message: `节点「${node.label}」防误触禁点纵带无效（需满足 0 <= y0 < y1 <= 1）。`,
+            });
+          }
+        }
         if (!p.saveMatchVar.trim()) {
           issues.push({
             level: 'error',
@@ -1141,8 +1698,18 @@ export function validateWorkflowIR(ir: WorkflowIR): ValidationResult {
             message: `OCR 节点「${node.label}」缺少保存结果的变量名 (saveMatchVar)。`,
           });
         } else {
-          availableRuntimeVars.add(p.saveMatchVar.trim());
-          producedInCurrentScope.add(p.saveMatchVar.trim());
+          const trimmedSave = p.saveMatchVar.trim();
+          if (!VALID_JS_IDENTIFIER.test(trimmedSave)) {
+            issues.push({
+              level: 'error',
+              category: 'schema_policy',
+              nodeId: node.id,
+              field: 'saveMatchVar',
+              message: `OCR 节点「${node.label}」的变量名 "${trimmedSave}" 不是合法的 JS 标识符。`,
+            });
+          }
+          availableRuntimeVars.add(trimmedSave);
+          producedInCurrentScope.add(trimmedSave);
         }
       }
 
